@@ -45,7 +45,13 @@
     width:85%;text-align:center;color:#fff !important;font-weight:700;
     text-shadow:0 1px 6px rgba(0,0,0,.7);pointer-events:none;}
   .opts{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;}
-  @media(max-width:560px){.opts{grid-template-columns:repeat(3,1fr);gap:5px;}}
+  @media(max-width:560px){
+    .opts{grid-template-columns:repeat(3,1fr);gap:6px;}
+    .opt{padding:8px 3px 6px;}
+    .opt .e{font-size:52px;}
+    .opt .l{font-size:13px;margin-top:5px;}
+    .opt-img{width:72px;height:72px;}
+  }
   .opt{cursor:pointer;border:none;border-radius:16px;padding:14px 6px 10px;
     text-align:center;background:none;transition:.16s ease;user-select:none;position:relative;}
   .opt:hover{transform:translateY(-4px);}
@@ -278,7 +284,7 @@
       <button class="big save" style="background:linear-gradient(90deg,#9b8cff,#7c6cff)" onclick="window.print()">🖨 列印</button>
     </div>
     <div class="warn" id="ttsWarn">😅 這個瀏覽器好像沒有中文／英文語音，建議用 Chrome 或 Edge 打開喔！</div>
-    <div class="hint">唸到哪個字，那個字就會放大跳起來、亮晶晶～跟著一起唸吧！（第一次按可能要等一下下）<br>
+    <div class="hint">唸到哪個字，那個字就會變成紅色～跟著一起唸吧！（第一次按可能要等一下下）<br>
       💡 想聽<b>更像真人</b>的聲音嗎？用 <b>Microsoft Edge</b> 打開，選單裡有「✨ 擬真」的微軟神經網路語音（免費），語氣最自然喔！</div>
   </div>
 
@@ -1014,6 +1020,14 @@ if(synth){
     if((synth.getVoices()||[]).length){ loadVoices(); clearInterval(vt); }
     else if(++tries>20) clearInterval(vt);   // 最多試約 6 秒
   },300);
+  // iOS Safari：語音清單只有在使用者觸碰後才會出現，第一次 touch 時再試一次
+  const iosVoiceFix=()=>{
+    if(!voiceList.length){ loadVoices(); }
+    document.removeEventListener('touchstart',iosVoiceFix);
+    document.removeEventListener('click',iosVoiceFix);
+  };
+  document.addEventListener('touchstart',iosVoiceFix,{once:true,passive:true});
+  document.addEventListener('click',iosVoiceFix,{once:true});
 }
 else setTtsWarn();
 
