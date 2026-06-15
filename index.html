@@ -136,17 +136,10 @@
   .ch{display:inline-block;transition:color .12s, transform .12s;border-radius:6px;
     will-change:transform;}
   .ch.read{color:var(--rose-d);}
-  /* 卡拉OK：唸到的那個字會放大、跳起來、發光 */
-  .ch.cursor{color:#fff;background:linear-gradient(180deg,#ffb84d,#ff8fb1);
-    padding:0 2px;border-radius:8px;
-    box-shadow:0 6px 14px rgba(255,143,177,.55);
-    animation:bounce .42s cubic-bezier(.28,.84,.42,1.4);}
-  /* 英文：整個單字一起跳（不是一個字母一個字母） */
-  .word.cursor{color:#fff;background:linear-gradient(180deg,#ffb84d,#ff8fb1);
-    padding:0 4px;border-radius:8px;
-    box-shadow:0 6px 14px rgba(255,143,177,.55);
-    animation:bounce .42s cubic-bezier(.28,.84,.42,1.4);}
-  .word.cursor .ch{color:#fff;background:none;box-shadow:none;}
+  /* 朗讀中：當前字/詞變紅色，不跳動 */
+  .ch.cursor{color:#e00;background:none;padding:0;border-radius:0;box-shadow:none;animation:none;}
+  .word.cursor{color:#e00;background:none;padding:0;border-radius:0;box-shadow:none;animation:none;}
+  .word.cursor .ch{color:#e00;background:none;box-shadow:none;}
   @keyframes bounce{
     0%{transform:translateY(0) scale(1);}
     40%{transform:translateY(-12px) scale(1.42) rotate(-4deg);}
@@ -219,11 +212,6 @@
 </style>
 </head>
 <body>
-<!-- 裝飾：巫師 -->
-<div class="deco-wizard" aria-hidden="true">
-  <img src="assets/characters/wizard.png" data-svg="assets/characters/wizard.svg" alt=""
-       onerror="this.dataset.t?this.remove():(this.dataset.t=1,this.src=this.dataset.svg)">
-</div>
 
 <div class="wrap">
   <header class="top">
