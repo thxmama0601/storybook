@@ -44,13 +44,12 @@
   .prev-cap{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
     width:85%;text-align:center;color:#fff !important;font-weight:700;
     text-shadow:0 1px 6px rgba(0,0,0,.7);pointer-events:none;}
-  .opts{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;}
+  .opts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;}
   @media(max-width:560px){
-    .opts{grid-template-columns:repeat(3,1fr);gap:6px;}
-    .opt{padding:8px 3px 6px;}
-    .opt .e{font-size:52px;}
+    .opts{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}
+    .opt{padding:8px 4px 6px;}
+    .opt .e{font-size:48px;}
     .opt .l{font-size:13px;margin-top:5px;}
-    .opt-img{width:72px;height:72px;}
   }
   .opt{cursor:pointer;border:none;border-radius:16px;padding:14px 6px 10px;
     text-align:center;background:none;transition:.16s ease;user-select:none;position:relative;}
@@ -65,16 +64,20 @@
     color:#fff;background:var(--rose);border-radius:50%;width:16px;height:16px;line-height:16px;font-weight:800;}
 
   /* 分頁式選擇器：圖片按鈕版 */
-  .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
-  .tab{font-family:inherit;cursor:pointer;border:none;border-radius:0;
+  .tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px;}
+  .tab{position:relative;font-family:inherit;cursor:pointer;border:none;border-radius:0;
     background:none;padding:0;transition:.15s ease;color:var(--ink);
-    display:flex;flex-direction:column;align-items:center;min-width:0;gap:4px;}
+    display:flex;flex-direction:column;align-items:center;min-width:0;}
   .tab-bg-img{width:100%;height:auto;display:block;object-fit:contain;transition:.15s ease;}
   .tab:hover .tab-bg-img{transform:translateY(-3px);filter:brightness(1.08);}
   .tab.active .tab-bg-img{transform:translateY(-3px);filter:brightness(1.12);}
-  .tab .tab-pick{font-size:14px;font-weight:700;color:#e8d0ff;
-    max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .tab .tab-pick.none{color:rgba(220,200,255,.4);font-weight:600;}
+  /* 選好的選項（例：公主）疊在按鈕上、就在分類文字（主角）下方 */
+  .tab .tab-pick{position:absolute;left:50%;bottom:9%;transform:translateX(-50%);
+    font-size:13px;font-weight:800;color:#fff;line-height:1.1;
+    background:rgba(58,22,104,.85);padding:1px 9px;border-radius:11px;
+    max-width:90%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    box-shadow:0 2px 6px rgba(0,0,0,.45);pointer-events:none;}
+  .tab .tab-pick.none{display:none;}
   .tab-no-img{border:2px solid var(--line) !important;border-radius:16px !important;
     background:#f6ecd5 !important;padding:9px 6px 8px !important;}
   .optpanel{animation:pop .3s cubic-bezier(.2,.9,.3,1.3);}
@@ -85,7 +88,8 @@
   .img-btn:active img{transform:scale(.95) translateY(3px);}
   .img-btn:disabled{opacity:.55;}
   @media(max-width:560px){
-    .tabs{gap:5px;}
+    body{padding-left:9px;padding-right:9px;}   /* 兩側少留白，內容更寬、按鈕更好按 */
+    .tabs{gap:5px;margin-bottom:14px;}          /* 上方四個頁籤鋪滿、平均分配、加大 */
     .tab .tab-pick{font-size:12px;}
     .img-btn img{height:70px;}
   }
@@ -119,6 +123,19 @@
     border:1px solid #e0cfae;box-shadow:0 18px 44px rgba(60,38,15,.28);overflow:hidden;margin-bottom:14px;}
   .book.show{display:block;animation:pop .45s cubic-bezier(.2,.9,.3,1.3);}
   @keyframes pop{from{transform:scale(.94) translateY(8px);opacity:0;}to{transform:none;opacity:1;}}
+  /* 右側伸縮抽屜：故事開啟後才出現，點開有「重設故事」 */
+  .resetDrawer{position:fixed;top:50%;right:0;transform:translateY(-50%);z-index:60;
+    display:none;align-items:center;}
+  .resetDrawer.show{display:flex;}
+  .resetDrawer .rd-panel{overflow:hidden;max-width:0;transition:max-width .3s ease;white-space:nowrap;}
+  .resetDrawer.open .rd-panel{max-width:220px;}
+  .resetDrawer .rd-reset{margin-right:4px;background:linear-gradient(90deg,#ff7eb3,#ff6a8c);
+    color:#fff;border:none;padding:13px 18px;border-radius:16px;font-size:17px;font-weight:800;
+    cursor:pointer;box-shadow:0 6px 16px rgba(60,38,15,.28);}
+  .resetDrawer .rd-tab{background:linear-gradient(90deg,#9b8cff,#7c6cff);color:#fff;border:none;
+    width:40px;height:66px;border-radius:16px 0 0 16px;font-size:22px;cursor:pointer;
+    box-shadow:-3px 4px 12px rgba(60,38,15,.25);line-height:1;}
+  @media print{.resetDrawer{display:none !important;}}
   .scene{width:100%;display:block;}
   /* 自訂圖片場景：背景圖 + 前景人物圖（疊圖） */
   .sceneBox{position:relative;width:100%;aspect-ratio:380/170;overflow:hidden;background:#cfe6ff;}
@@ -205,7 +222,8 @@
   }
 
   /* 角色選項格：顯示角色圖片 */
-  .opt-img{width:130px;height:130px;object-fit:contain;object-position:bottom center;display:block;margin:0 auto 2px;}
+  /* 圖片寬度跟著格子縮放，永遠不會超出格子（手機不再被切掉） */
+  .opt-img{width:100%;max-width:124px;height:auto;aspect-ratio:1/1;object-fit:contain;object-position:bottom center;display:block;margin:0 auto 2px;}
   .opt-fb{font-size:30px;line-height:1.05;}
   .opt:has(.opt-img) .opt-fb{display:none;}
 
@@ -221,23 +239,14 @@
 
 <div class="wrap">
   <header class="top">
-    <div class="logo" id="logoWrap">
+    <div class="logo" id="logoWrap" onclick="goHome()" title="回到首頁・重新選主角"
+         style="cursor:pointer;">
       <img id="logoImg" src="assets/theme/title.png" alt="魔法故事屋"
            style="max-height:90px;max-width:100%;object-fit:contain;display:block;">
     </div>
   </header>
 
   <div id="groups"></div>
-
-  <!-- 即時預覽：選好主角和場景，這裡會立刻合成畫面 -->
-  <div class="card preview-card" id="previewCard">
-    <h2>👀 預覽你的故事畫面</h2>
-    <div class="preview-wrap">
-      <img src="assets/theme/preview.png" class="preview-img" alt="">
-      <div class="prev-cap" id="previewCap">先選一個主角和一個場景，這裡會立刻把人物放進場景裡給你看～</div>
-      <div class="sceneBox" id="previewStage" style="display:none"></div>
-    </div>
-  </div>
 
   <div class="controls">
     <button class="big gen img-btn" id="genBtn" onclick="generate()">
@@ -297,6 +306,12 @@
 
 <!-- 手機底部固定動作列：依有無故事切換「變出故事 / 開始念」 -->
 <div class="mobilebar" id="mobileBar"></div>
+
+<!-- 右側伸縮抽屜：故事開啟後出現，點開可「重設故事」回到選主角畫面 -->
+<div class="resetDrawer" id="resetDrawer">
+  <div class="rd-panel"><button class="rd-reset" onclick="resetStory()">🔄 重設故事</button></div>
+  <button class="rd-tab" onclick="toggleResetDrawer()" title="更多選項">⚙️</button>
+</div>
 
 <script>
 /* =================== 選項 =================== */
@@ -776,8 +791,26 @@ function showStory(story){
 
   document.getElementById('book').classList.add('show');
   document.getElementById('voicebar').classList.add('show');
+  document.getElementById('resetDrawer').classList.add('show');
   updateMobileBar();
   document.getElementById('book').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// 點 LOGO：回到首頁最上方（選主角的區塊）
+function goHome(){ window.scrollTo({top:0,behavior:'smooth'}); }
+// 右側抽屜：展開／收合
+function toggleResetDrawer(){ document.getElementById('resetDrawer').classList.toggle('open'); }
+// 重設故事：收起故事，清空選擇，跳回一開始選主角的畫面
+function resetStory(){
+  stopSpeak();
+  document.getElementById('book').classList.remove('show');
+  document.getElementById('voicebar').classList.remove('show');
+  document.getElementById('resetDrawer').classList.remove('show','open');
+  sel.char=null; sel.attr=null; sel.loc=null; sel.act=null;
+  currentPlan=null; currentStory=null;
+  renderOpts();
+  updateMobileBar();
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 
 // 手機底部固定列：沒故事時「變出故事」；有故事時換成「開始念／停／再變」
@@ -899,8 +932,8 @@ function renderGroups(){
   const tabImgs={char:'who.png',attr:'what.png',loc:'where.png',act:'when.png'};
   const tabImg=tabImgs[g.key];
   const titleHtml=tabImg
-    ?`<img src="assets/theme/${tabImg}" alt="${g.title}" style="max-height:56px;max-width:100%;object-fit:contain;display:block;margin:0 0 10px;" onerror="this.outerHTML='<h2>${g.title}</h2>'">`
-    :`<h2>${g.title}</h2>`;
+    ?`<img src="assets/theme/${tabImg}" alt="${g.title}" style="max-height:56px;max-width:100%;object-fit:contain;display:block;margin:0 auto 10px;" onerror="this.outerHTML='<h2 style=text-align:center>${g.title}</h2>'">`
+    :`<h2 style="text-align:center">${g.title}</h2>`;
   document.getElementById('groups').innerHTML=
     `<div class="tabs">${tabs}</div><div class="card optpanel">${titleHtml}<div class="opts">${grid}</div></div>`;
   updateScenePreview();
@@ -913,6 +946,12 @@ function choose(g,id){
   const next=GROUPS.findIndex((x,k)=>k>idx && !sel[x.key]);
   activeTab=next!==-1?next:idx;
   renderGroups();
+  // 四個分類全選完 → 自動帶到「變出一個故事」按鈕
+  if(GROUPS.every(x=>sel[x.key])){
+    const ctrl=document.querySelector('.controls');
+    if(ctrl && ctrl.offsetParent!==null) ctrl.scrollIntoView({behavior:'smooth',block:'center'});
+    else window.scrollTo({top:0,behavior:'smooth'});   // 手機：底部固定列本來就有「變出故事」，捲回頂端看完成狀態
+  }
 }
 // 主畫面即時預覽：選了主角／場景就立刻把人物放進場景（與故事插圖同一套疊圖）
 function updateScenePreview(){
@@ -947,6 +986,17 @@ const CAT_ORDER={tw:0,en:1};
 function cleanName(v){ return v.name.replace(/Microsoft|Google|Online|Natural|\(.*?\)|-/g,'').trim()||v.lang; }
 // 擬真（神經網路）語音：名字含 Natural / Neural / Online，多半在 Edge 出現
 function isNatural(v){ return /Natural|Neural|Online/i.test(v.name); }
+// 語音評分：分數越高音質越好、越接近擬真女聲，用來排序＋挑預設
+function voiceScore(v){
+  const n=v.name; let s=0;
+  if(/Neural|Natural/i.test(n)) s+=100;          // 神經網路擬真（最自然）
+  else if(/Online/i.test(n))   s+=80;            // 線上擬真
+  if(/HsiaoChen|HsiaoYu|曉臻|曉雨/i.test(n)) s+=40; // 微軟台灣神經女聲
+  else if(/Yating|雅婷/i.test(n))            s+=25; // 其他台灣女聲
+  else if(/Hanhan|Zhiwei|曉維/i.test(n))      s+=15;
+  if(/Google/i.test(n)) s+=10;
+  return s;
+}
 // 偵測 App 內建瀏覽器（LINE／FB／IG／微信等 WebView），這些多半不支援唸故事
 function isInApp(){
   const u=navigator.userAgent||'';
@@ -968,11 +1018,14 @@ function loadVoices(){
   // 台灣語音只保留「國語（台灣）」這顆（名稱用中文標示者），其餘台灣語音不顯示；英文不受影響
   const twNamed=voiceList.filter(x=>x.c==='tw' && /國語|臺灣|台灣/.test(x.v.name));
   if(twNamed.length) voiceList=voiceList.filter(x=> x.c!=='tw' || twNamed.includes(x));
-  // 先依語言（台灣→英文），同語言內「擬真語音」排最前面
-  voiceList.sort((a,b)=> CAT_ORDER[a.c]-CAT_ORDER[b.c] || (b.nat-a.nat));
+  // 先依語言（台灣→英文），同語言內依評分排序（擬真女聲排最前面）
+  voiceList.sort((a,b)=> CAT_ORDER[a.c]-CAT_ORDER[b.c] || voiceScore(b.v)-voiceScore(a.v));
+  // 每種語言的第一名（分數最高那支）標為「👑 推薦」
+  const recIdx=new Set();
+  ['tw','en'].forEach(c=>{ const top=voiceList.find(x=>x.c===c); if(top) recIdx.add(top.i); });
   const s=document.getElementById('voiceSel');
   if(voiceList.length){
-    s.innerHTML=voiceList.map(x=>`<option value="${x.i}">${x.nat?'✨ ':''}${CAT_LABEL[x.c]}｜${cleanName(x.v)}${x.nat?'（擬真）':''}</option>`).join('');
+    s.innerHTML=voiceList.map(x=>`<option value="${x.i}">${recIdx.has(x.i)?'👑 推薦｜':''}${x.nat?'✨ ':''}${CAT_LABEL[x.c]}｜${cleanName(x.v)}${x.nat?'（擬真）':''}</option>`).join('');
     chosenVoice=voices[voiceList[0].i];
     s.onchange=e=>chosenVoice=voices[+e.target.value];
     const hasZh=voiceList.some(x=>x.c==='tw');
