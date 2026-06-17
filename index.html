@@ -1013,6 +1013,7 @@ function voiceScore(v){
   if(/Google/i.test(n)) s+=10;
   return s;
 }
+const _isMobile=/iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
 // 偵測 App 內建瀏覽器（LINE／FB／IG／微信等 WebView）
 function isInApp(){
   const u=navigator.userAgent||'';
@@ -1122,7 +1123,6 @@ function stopKeepAlive(){ if(iosKeepAlive){ clearInterval(iosKeepAlive); iosKeep
 
 /* ---------- 判斷是否需要備援語音 ---------- */
 let fallbackAudio=null, speakAborted=false;
-const _isMobile=/iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
 function needsFallback(){
   if(!synth) return true;
   // 所有手機一律用 Google Translate TTS（最穩定，不受 WebView/iOS/Android 限制）
