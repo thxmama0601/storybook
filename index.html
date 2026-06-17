@@ -276,26 +276,35 @@
 
   /* WebView 提示橫幅 */
   .wv-banner{background:linear-gradient(135deg,#6a3de8,#9b6dff);color:#fff;
-    padding:11px 16px;font-size:13px;line-height:1.55;text-align:center;
-    font-weight:700;display:none;position:relative;}
+    padding:14px 16px;font-size:14px;line-height:1.6;text-align:center;
+    font-weight:700;display:none;}
   .wv-banner b{color:#ffd86b;}
-  .wv-banner .wv-close{position:absolute;right:8px;top:6px;background:none;border:none;
-    color:rgba(255,255,255,.7);font-size:18px;cursor:pointer;padding:2px 6px;}
+  .wv-banner .wv-open-btn{display:inline-block;margin-top:8px;padding:9px 24px;
+    background:#ffd86b;color:#4a2d8a;border:none;border-radius:20px;font-size:15px;
+    font-weight:800;cursor:pointer;font-family:inherit;box-shadow:0 3px 10px rgba(0,0,0,.25);}
+  .wv-banner .wv-open-btn:active{transform:scale(.96);}
+  .wv-banner .wv-close{position:absolute;right:6px;top:4px;background:none;border:none;
+    color:rgba(255,255,255,.6);font-size:16px;cursor:pointer;padding:2px 6px;}
   /* WebView 語音失敗提示 toast */
   .wv-toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);
-    background:rgba(30,10,60,.92);color:#fff;padding:12px 20px;border-radius:16px;
-    font-size:13px;font-weight:700;line-height:1.6;text-align:center;z-index:9999;
-    box-shadow:0 4px 20px rgba(0,0,0,.4);max-width:90vw;
+    background:rgba(30,10,60,.95);color:#fff;padding:14px 22px;border-radius:18px;
+    font-size:14px;font-weight:700;line-height:1.7;text-align:center;z-index:9999;
+    box-shadow:0 4px 24px rgba(0,0,0,.5);max-width:88vw;
     animation:toastIn .3s ease;}
   .wv-toast b{color:#ffd86b;}
+  .wv-toast .wv-open-btn{display:inline-block;margin-top:8px;padding:8px 22px;
+    background:#ffd86b;color:#4a2d8a;border:none;border-radius:18px;font-size:14px;
+    font-weight:800;cursor:pointer;font-family:inherit;}
   @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(20px);}
     to{opacity:1;transform:translateX(-50%) translateY(0);}}
 </style>
 </head>
 <body>
 
-<div class="wv-banner" id="wvBanner">
-  📢 語音功能在 APP 內可能受限，建議點右上角 <b>⋯</b> → <b>「用預設瀏覽器開啟」</b>
+<div class="wv-banner" id="wvBanner" style="position:relative;">
+  🔊 語音朗讀需要用瀏覽器才能播放喔！
+  <br>
+  <button class="wv-open-btn" onclick="_openExtBrowser()">👉 用瀏覽器開啟（聽故事）</button>
   <button class="wv-close" onclick="this.parentElement.style.display='none'">✕</button>
 </div>
 
@@ -1543,6 +1552,17 @@ function delStory(i){
 
 
 /* =================== WebView 偵測與提示 =================== */
+function _openExtBrowser(){
+  const url=location.href.replace(/[?#].*$/,'');
+  if(/android/i.test(navigator.userAgent)){
+    // Android：用 intent 跳轉到預設瀏覽器
+    const stripped=url.replace(/^https?:\/\//,'');
+    location.href='intent://'+stripped+'#Intent;scheme=https;action=android.intent.action.VIEW;end';
+  } else {
+    // iOS / 其他：嘗試用 Safari 開啟
+    window.open(url,'_system')||window.open(url,'_blank');
+  }
+}
 if(_isMobile && isInApp()){
   document.getElementById('wvBanner').style.display='block';
 }
@@ -1550,9 +1570,9 @@ function _showWebviewHint(){
   if(document.querySelector('.wv-toast')) return;
   const t=document.createElement('div');
   t.className='wv-toast';
-  t.innerHTML='🔇 此瀏覽器無法播放語音<br>請點右上角 <b>⋯</b> → <b>「用預設瀏覽器開啟」</b>';
+  t.innerHTML='🔇 此瀏覽器無法播放語音<br><button class="wv-open-btn" onclick="_openExtBrowser()">👉 用瀏覽器開啟</button><br><span style="font-size:12px;opacity:.7;">或點右下角 ⋯ →「預設瀏覽器開啟」</span>';
   document.body.appendChild(t);
-  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .4s'; setTimeout(()=>t.remove(),500); },5000);
+  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .5s'; setTimeout(()=>t.remove(),600); },8000);
 }
 
 /* =================== 初始化 =================== */
