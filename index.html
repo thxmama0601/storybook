@@ -4,6 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🌙 魔法故事屋</title>
+<script>
+// WebView 偵測＋自動跳轉 Chrome（放在最前面，頁面還沒渲染就執行）
+(function(){
+  var ua=navigator.userAgent||'';
+  var wv=/Line\/|FBAN|FBAV|FB_IAB|Instagram|MicroMessenger|; wv\)|musical_ly|TikTok/i.test(ua);
+  var mob=/iPhone|iPad|iPod|Android|Mobile/i.test(ua);
+  if(!mob||!wv) return;
+  if(sessionStorage.getItem('_wvTried')) return;
+  sessionStorage.setItem('_wvTried','1');
+  var url=location.href.replace(/[?#].*$/,'');
+  var host=url.replace(/^https?:\/\//,'');
+  if(/android/i.test(ua)){
+    // 方法1：googlechromes:// 直接喚起 Chrome
+    location.href='googlechromes://'+host;
+    // 方法2：若 500ms 後還在這頁，試 intent://
+    setTimeout(function(){
+      location.href='intent://'+host+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(url)+';end';
+    },500);
+  } else if(/iPhone|iPad|iPod/i.test(ua)){
+    // iOS：試 googlechromes://，Chrome 未裝則不跳
+    location.href='googlechromes://'+host;
+  }
+})();
+</script>
 <style>
   :root{
     --paper:#f7efda; --ink:#46382a; --soft:#9a8a72; --line:#e0cfae;
@@ -1554,28 +1578,24 @@ function delStory(i){
 /* =================== WebView 偵測與提示 =================== */
 function _openInChrome(){
   const url=location.href.replace(/[?#].*$/,'');
-  const fallback=encodeURIComponent(url);
+  const host=url.replace(/^https?:\/\//,'');
   if(/android/i.test(navigator.userAgent)){
-    const stripped=url.replace(/^https?:\/\//,'');
-    // 優先開 Chrome，若未安裝則開預設瀏覽器
-    location.href='intent://'+stripped+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+fallback+';end';
+    // 雙重嘗試：googlechromes + intent
+    location.href='googlechromes://'+host;
+    setTimeout(()=>{
+      location.href='intent://'+host+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(url)+';end';
+    },500);
   } else {
-    // iOS：嘗試開 Safari
-    window.open(url,'_system')||window.open(url,'_blank');
+    location.href='googlechromes://'+host;
+    setTimeout(()=>{ window.open(url,'_blank'); },500);
   }
 }
-// WebView 自動跳轉 Chrome（僅觸發一次，避免迴圈）
+// WebView：head 裡的腳本已嘗試自動跳轉，這裡負責顯示備用橫幅
 if(_isMobile && isInApp()){
-  if(!sessionStorage.getItem('_wvTried')){
-    sessionStorage.setItem('_wvTried','1');
-    _openInChrome();
-    // 若 1.5 秒後還在此頁（跳轉失敗），顯示橫幅
-    setTimeout(()=>{
-      document.getElementById('wvBanner').style.display='block';
-    },1500);
-  } else {
+  // 若還留在此頁，1.2 秒後顯示橫幅
+  setTimeout(()=>{
     document.getElementById('wvBanner').style.display='block';
-  }
+  },1200);
 }
 function _showWebviewHint(){
   if(document.querySelector('.wv-toast')) return;
