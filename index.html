@@ -87,6 +87,13 @@
   .img-btn img{display:block;height:92px;width:auto;object-fit:contain;transition:.12s;}
   .img-btn:active img{transform:scale(.95) translateY(3px);}
   .img-btn:disabled{opacity:.55;}
+  /* 四選完成：按鈕發光動畫 */
+  @keyframes btnGlow{
+    0%,100%{box-shadow:0 0 8px 2px rgba(255,180,60,.4),0 0 20px 6px rgba(255,140,60,.25);}
+    50%{box-shadow:0 0 18px 6px rgba(255,200,80,.7),0 0 40px 14px rgba(255,160,60,.4);}
+  }
+  .img-btn.glow img{animation:btnGlow 1.2s ease-in-out infinite;border-radius:20px;}
+  .gen.glow:not(.img-btn){animation:btnGlow 1.2s ease-in-out infinite;}
   @media(max-width:560px){
     body{padding-left:9px;padding-right:9px;}   /* 兩側少留白，內容更寬、按鈕更好按 */
     .tabs{gap:5px;margin-bottom:14px;}          /* 上方四個頁籤鋪滿、平均分配、加大 */
@@ -729,6 +736,7 @@ let readSeq=[], sentenceStart=[], chars=[], wrappers=[], readLang='zh';
 let currentPlan=null, currentLang='zh';
 function generate(){
   GROUPS.forEach(g=>{ if(!sel[g.key]) sel[g.key]=rnd(g.opts).id; });
+  document.querySelectorAll('.gen').forEach(b=>b.classList.remove('glow'));
   renderOpts();
   stopSpeak();
   currentPlan=buildPlan();
@@ -803,6 +811,7 @@ function toggleResetDrawer(){ document.getElementById('resetDrawer').classList.t
 // 重設故事：收起故事，清空選擇，跳回一開始選主角的畫面
 function resetStory(){
   stopSpeak();
+  document.querySelectorAll('.gen').forEach(b=>b.classList.remove('glow'));
   document.getElementById('book').classList.remove('show');
   document.getElementById('voicebar').classList.remove('show');
   document.getElementById('resetDrawer').classList.remove('show','open');
@@ -946,11 +955,14 @@ function choose(g,id){
   const next=GROUPS.findIndex((x,k)=>k>idx && !sel[x.key]);
   activeTab=next!==-1?next:idx;
   renderGroups();
-  // 四個分類全選完 → 自動帶到「變出一個故事」按鈕
+  // 四個分類全選完 → 自動帶到「變出一個故事」按鈕 + 發光提示
   if(GROUPS.every(x=>sel[x.key])){
+    document.querySelectorAll('.gen').forEach(b=>b.classList.add('glow'));
     const ctrl=document.querySelector('.controls');
     if(ctrl && ctrl.offsetParent!==null) ctrl.scrollIntoView({behavior:'smooth',block:'center'});
-    else window.scrollTo({top:0,behavior:'smooth'});   // 手機：底部固定列本來就有「變出故事」，捲回頂端看完成狀態
+    else window.scrollTo({top:0,behavior:'smooth'});
+  }else{
+    document.querySelectorAll('.gen').forEach(b=>b.classList.remove('glow'));
   }
 }
 // 主畫面即時預覽：選了主角／場景就立刻把人物放進場景（與故事插圖同一套疊圖）
