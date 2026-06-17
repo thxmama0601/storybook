@@ -273,9 +273,31 @@
     filter:drop-shadow(0 0 20px rgba(140,80,255,.75));}
   .deco-wizard img{width:100%;height:auto;object-fit:contain;object-position:bottom;}
   @media(max-width:880px){.deco-wizard{display:none;}}
+
+  /* WebView 提示橫幅 */
+  .wv-banner{background:linear-gradient(135deg,#6a3de8,#9b6dff);color:#fff;
+    padding:11px 16px;font-size:13px;line-height:1.55;text-align:center;
+    font-weight:700;display:none;position:relative;}
+  .wv-banner b{color:#ffd86b;}
+  .wv-banner .wv-close{position:absolute;right:8px;top:6px;background:none;border:none;
+    color:rgba(255,255,255,.7);font-size:18px;cursor:pointer;padding:2px 6px;}
+  /* WebView 語音失敗提示 toast */
+  .wv-toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);
+    background:rgba(30,10,60,.92);color:#fff;padding:12px 20px;border-radius:16px;
+    font-size:13px;font-weight:700;line-height:1.6;text-align:center;z-index:9999;
+    box-shadow:0 4px 20px rgba(0,0,0,.4);max-width:90vw;
+    animation:toastIn .3s ease;}
+  .wv-toast b{color:#ffd86b;}
+  @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(20px);}
+    to{opacity:1;transform:translateX(-50%) translateY(0);}}
 </style>
 </head>
 <body>
+
+<div class="wv-banner" id="wvBanner">
+  📢 語音功能在 APP 內可能受限，建議點右上角 <b>⋯</b> → <b>「用預設瀏覽器開啟」</b>
+  <button class="wv-close" onclick="this.parentElement.style.display='none'">✕</button>
+</div>
 
 <div class="wrap">
   <header class="top">
@@ -1288,7 +1310,9 @@ function stopKeepAlive(){ if(iosKeepAlive){ clearInterval(iosKeepAlive); iosKeep
 let fallbackAudio=null, speakAborted=false;
 function needsFallback(){
   if(!synth) return true;
-  // 所有手機一律用 Google Translate TTS（最穩定，不受 WebView/iOS/Android 限制）
+  // WebView（LINE/FB/IG）：Google TTS 幾乎一定被擋，直接用原生 speechSynthesis
+  if(_isMobile && isInApp()) return false;
+  // 其他手機瀏覽器：用 Google Translate TTS（音質好、穩定）
   if(_isMobile) return true;
   const v=synth.getVoices(); if(!v||!v.length) return true;
   return false;
@@ -1380,10 +1404,17 @@ function _speakFallback(){
 }
 
 /* ---------- 主要 speak()：自動選原生 or 備援 ---------- */
+let _webviewSynthFailed=false;
 function speak(){
   if(readSeq.length===0) return;
   _unlockAudio();
   speakAborted=false; clearHL();
+  // WebView 且 synth 已知失敗 → 還是走 Google TTS 碰運氣
+  if(_isMobile && isInApp() && _webviewSynthFailed){
+    if(fallbackAudio){ fallbackAudio.pause(); fallbackAudio.removeAttribute('src'); fallbackAudio.load(); fallbackAudio=null; }
+    _speakFallback();
+    return;
+  }
   // 備援路徑：用 Google Translate TTS <audio>（WebView/無語音瀏覽器）
   if(needsFallback()){
     if(fallbackAudio){ fallbackAudio.pause(); fallbackAudio.removeAttribute('src'); fallbackAudio.load(); fallbackAudio=null; }
@@ -1393,7 +1424,12 @@ function speak(){
   // 原生 speechSynthesis 路徑
   if(!chosenVoice||!voices.length) loadVoices();
   synth.cancel();
-  setTimeout(()=>{ if(!speakAborted) _speakChain(); },120);
+  if(_isMobile && isInApp()){
+    // WebView：不延遲，保持手勢授權鏈
+    if(!speakAborted) _speakChain();
+  } else {
+    setTimeout(()=>{ if(!speakAborted) _speakChain(); },120);
+  }
 }
 function _speakChain(){
   let i=0;
@@ -1450,7 +1486,16 @@ function _speakChain(){
     u.onend=()=>done();
     u.onerror=()=>done();
     synth.speak(u);
-    setTimeout(()=>{ if(!startWall&&!ended&&!speakAborted) done(); },3000);
+    setTimeout(()=>{
+      if(!startWall&&!ended&&!speakAborted){
+        // synth 完全沒啟動 → WebView 中顯示提示
+        if(_isMobile && isInApp() && i===0){
+          _webviewSynthFailed=true;
+          _showWebviewHint();
+        }
+        done();
+      }
+    },3000);
   })();
 }
 function stopSpeak(){
@@ -1496,6 +1541,19 @@ function delStory(i){
   localStorage.setItem('storybook', JSON.stringify(shelf)); renderShelf();
 }
 
+
+/* =================== WebView 偵測與提示 =================== */
+if(_isMobile && isInApp()){
+  document.getElementById('wvBanner').style.display='block';
+}
+function _showWebviewHint(){
+  if(document.querySelector('.wv-toast')) return;
+  const t=document.createElement('div');
+  t.className='wv-toast';
+  t.innerHTML='🔇 此瀏覽器無法播放語音<br>請點右上角 <b>⋯</b> → <b>「用預設瀏覽器開啟」</b>';
+  document.body.appendChild(t);
+  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .4s'; setTimeout(()=>t.remove(),500); },5000);
+}
 
 /* =================== 初始化 =================== */
 renderGroups();
