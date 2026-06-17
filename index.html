@@ -1020,27 +1020,27 @@ function isInApp(){
 }
 function setTtsWarn(){
   const w=document.getElementById('ttsWarn');
-  if(isInApp()){
-    w.innerHTML='📢 偵測到 App 內建瀏覽器，將使用線上語音為你唸故事。如果聽不到聲音，請點右上角「⋯」選「用瀏覽器開啟」試試～';
-  }else{
-    w.innerHTML='😅 這個瀏覽器好像沒有中文／英文語音，建議用 <b>Chrome／Edge</b>（電腦）或 <b>Safari</b>（iPhone）打開喔！';
-  }
+  // 手機一律走線上語音，不需要警告
+  if(_isMobile){ w.style.display='none'; return; }
+  w.innerHTML='😅 這個瀏覽器好像沒有中文／英文語音，建議用 <b>Chrome／Edge</b>（電腦）打開喔！';
   w.style.display='block';
 }
 function loadVoices(){
   if(!synth) return;
+  const s=document.getElementById('voiceSel');
+  // 手機一律用線上語音，不需要載入本機語音清單
+  if(_isMobile){
+    s.innerHTML='<option>🔊 線上語音（自動）</option>';
+    document.getElementById('ttsWarn').style.display='none';
+    return;
+  }
   voices=synth.getVoices();
   voiceList=voices.map((v,i)=>({v,i,c:voiceCat(v),nat:isNatural(v)})).filter(x=>x.c);
-  // 桌機有名稱含「國語/台灣」的就只留那些；手機聲音少，全部保留不過濾
   const twNamed=voiceList.filter(x=>x.c==='tw' && /國語|臺灣|台灣/.test(x.v.name));
-  const isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  if(twNamed.length && !isMobile) voiceList=voiceList.filter(x=> x.c!=='tw' || twNamed.includes(x));
-  // 先依語言（台灣→英文），同語言內依評分排序（擬真女聲排最前面）
+  if(twNamed.length) voiceList=voiceList.filter(x=> x.c!=='tw' || twNamed.includes(x));
   voiceList.sort((a,b)=> CAT_ORDER[a.c]-CAT_ORDER[b.c] || voiceScore(b.v)-voiceScore(a.v));
-  // 每種語言的第一名（分數最高那支）標為「👑 推薦」
   const recIdx=new Set();
   ['tw','en'].forEach(c=>{ const top=voiceList.find(x=>x.c===c); if(top) recIdx.add(top.i); });
-  const s=document.getElementById('voiceSel');
   if(voiceList.length){
     s.innerHTML=voiceList.map(x=>`<option value="${x.i}">${recIdx.has(x.i)?'👑 推薦｜':''}${x.nat?'✨ ':''}${CAT_LABEL[x.c]}｜${cleanName(x.v)}${x.nat?'（擬真）':''}</option>`).join('');
     chosenVoice=voices[voiceList[0].i];
@@ -1048,12 +1048,11 @@ function loadVoices(){
     const hasZh=voiceList.some(x=>x.c==='tw');
     document.getElementById('ttsWarn').style.display=hasZh?'none':'block';
   }else if(voices.length){
-    // 有語音但被過濾掉（例如只有大陸普通話）：仍可用，預設用系統第一顆，不擋唸故事
     s.innerHTML='<option value="0">（系統預設語音）</option>';
     chosenVoice=voices[0];
     setTtsWarn();
   }else{
-    s.innerHTML='<option>（線上語音 — 自動）</option>';
+    s.innerHTML='<option>🔊 線上語音（自動）</option>';
     setTtsWarn();
   }
 }
@@ -1066,21 +1065,22 @@ function pickVoiceForLang(lang){
   document.getElementById('voiceSel').value=found.i;
 }
 if(synth){
-  loadVoices(); synth.onvoiceschanged=loadVoices;
-  // 手機語音清單載入很慢：輪詢最多 15 秒
-  let tries=0;
-  const vt=setInterval(()=>{
-    if((synth.getVoices()||[]).length){ loadVoices(); clearInterval(vt); }
-    else if(++tries>50) clearInterval(vt);
-  },300);
-  // iOS Safari / Android WebView：語音常在使用者觸碰後才出現，每次 touch/click 都重試
-  function touchVoiceFix(){
-    if(!voiceList.length || !chosenVoice) loadVoices();
+  loadVoices();
+  if(!_isMobile){
+    // 桌機：偵測語音清單變動＋輪詢重試
+    synth.onvoiceschanged=loadVoices;
+    let tries=0;
+    const vt=setInterval(()=>{
+      if((synth.getVoices()||[]).length){ loadVoices(); clearInterval(vt); }
+      else if(++tries>50) clearInterval(vt);
+    },300);
   }
-  document.addEventListener('touchstart',touchVoiceFix,{passive:true});
-  document.addEventListener('click',touchVoiceFix);
+}else{
+  // 完全沒有 speechSynthesis：手機仍可用線上語音
+  const s=document.getElementById('voiceSel');
+  s.innerHTML='<option>🔊 線上語音（自動）</option>';
+  if(!_isMobile) setTtsWarn();
 }
-else setTtsWarn();
 
 function setRate(el,r){ rate=r; document.querySelectorAll('.chip[data-rate]').forEach(c=>c.classList.remove('sel')); el.classList.add('sel'); }
 let curCursorEl=null;
@@ -1122,9 +1122,11 @@ function stopKeepAlive(){ if(iosKeepAlive){ clearInterval(iosKeepAlive); iosKeep
 
 /* ---------- 判斷是否需要備援語音 ---------- */
 let fallbackAudio=null, speakAborted=false;
+const _isMobile=/iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
 function needsFallback(){
   if(!synth) return true;
-  if(isInApp()) return true;
+  // 所有手機一律用 Google Translate TTS（最穩定，不受 WebView/iOS/Android 限制）
+  if(_isMobile) return true;
   const v=synth.getVoices(); if(!v||!v.length) return true;
   return false;
 }
