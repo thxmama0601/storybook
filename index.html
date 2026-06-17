@@ -987,10 +987,14 @@ let voices=[], voiceList=[], chosenVoice=null, rate=1.0;
 // 只保留：國語（台灣）、English（普通話／大陸語音一律排除）
 function voiceCat(v){
   const s=v.lang+' '+v.name;
-  // 只保留國語（台灣）與 English；普通話（中國大陸）一律排除
+  // 明確排除大陸普通話
   if(/zh[-_]?CN|zh[-_]?Hans|cmn|Xiaoxiao|Yunyang|Yunxi|Huihui|Kangkang|Yaoyao|China|Mandarin/i.test(s)) return null;
+  // 台灣國語
   if(/zh[-_]?TW|zh[-_]?Hant|Taiwan|Yating|Hanhan|Zhiwei|HsiaoChen|HsiaoYu|Meijia/i.test(s)) return 'tw';
+  // 英文
   if(/^en|English/i.test(s)) return 'en';
+  // 泛中文（手機可能只標 zh，不分 TW/CN）→ 當台灣用
+  if(/^zh/i.test(v.lang)) return 'tw';
   return null;
 }
 const CAT_LABEL={tw:'🇹🇼 國語（台灣）',en:'🇬🇧 English'};
@@ -1027,9 +1031,10 @@ function loadVoices(){
   if(!synth) return;
   voices=synth.getVoices();
   voiceList=voices.map((v,i)=>({v,i,c:voiceCat(v),nat:isNatural(v)})).filter(x=>x.c);
-  // 台灣語音只保留「國語（台灣）」這顆（名稱用中文標示者），其餘台灣語音不顯示；英文不受影響
+  // 桌機有名稱含「國語/台灣」的就只留那些；手機聲音少，全部保留不過濾
   const twNamed=voiceList.filter(x=>x.c==='tw' && /國語|臺灣|台灣/.test(x.v.name));
-  if(twNamed.length) voiceList=voiceList.filter(x=> x.c!=='tw' || twNamed.includes(x));
+  const isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  if(twNamed.length && !isMobile) voiceList=voiceList.filter(x=> x.c!=='tw' || twNamed.includes(x));
   // 先依語言（台灣→英文），同語言內依評分排序（擬真女聲排最前面）
   voiceList.sort((a,b)=> CAT_ORDER[a.c]-CAT_ORDER[b.c] || voiceScore(b.v)-voiceScore(a.v));
   // 每種語言的第一名（分數最高那支）標為「👑 推薦」
@@ -1062,20 +1067,18 @@ function pickVoiceForLang(lang){
 }
 if(synth){
   loadVoices(); synth.onvoiceschanged=loadVoices;
-  // 手機（iOS／部分 Android）onvoiceschanged 常常不觸發，改用輪詢重試抓語音
+  // 手機語音清單載入很慢：輪詢最多 15 秒
   let tries=0;
   const vt=setInterval(()=>{
     if((synth.getVoices()||[]).length){ loadVoices(); clearInterval(vt); }
-    else if(++tries>20) clearInterval(vt);   // 最多試約 6 秒
+    else if(++tries>50) clearInterval(vt);
   },300);
-  // iOS Safari：語音清單只有在使用者觸碰後才會出現，第一次 touch 時再試一次
-  const iosVoiceFix=()=>{
-    if(!voiceList.length){ loadVoices(); }
-    document.removeEventListener('touchstart',iosVoiceFix);
-    document.removeEventListener('click',iosVoiceFix);
-  };
-  document.addEventListener('touchstart',iosVoiceFix,{once:true,passive:true});
-  document.addEventListener('click',iosVoiceFix,{once:true});
+  // iOS Safari / Android WebView：語音常在使用者觸碰後才出現，每次 touch/click 都重試
+  function touchVoiceFix(){
+    if(!voiceList.length || !chosenVoice) loadVoices();
+  }
+  document.addEventListener('touchstart',touchVoiceFix,{passive:true});
+  document.addEventListener('click',touchVoiceFix);
 }
 else setTtsWarn();
 
@@ -1108,36 +1111,68 @@ function highlightUpTo(n){
 }
 function fillSentence(i){ const end=sentenceStart[i]+readSeq[i].length; for(let k=0;k<end;k++) chars[k]&&chars[k].classList.add('read'); clearCursor(); }
 let rafId=null, learnedMs={zh:0,en:0};   // 各語言「每字實際毫秒」(rate=1)，用前一句時長學習校正
+// iOS Safari 會在 ~15 秒後靜默暫停語音，定時 resume() 保持播放
+let iosKeepAlive=null;
+function startKeepAlive(){
+  stopKeepAlive();
+  if(!synth) return;
+  iosKeepAlive=setInterval(()=>{ if(synth.speaking && !synth.paused) synth.resume(); },5000);
+}
+function stopKeepAlive(){ if(iosKeepAlive){ clearInterval(iosKeepAlive); iosKeepAlive=null; } }
+
+let speakAborted=false;
 function speak(){
   if(!synth||readSeq.length===0) return;
-  if(!chosenVoice) loadVoices();   // iOS 常在第一次點擊（使用者手勢）後才有語音
+  speakAborted=false;
+  // iOS 常在第一次點擊後才載入語音
+  if(!chosenVoice || !voices.length) loadVoices();
+  // 先用一句空白 utterance「解鎖」音訊（iOS/Android 需要使用者手勢內觸發過一次 speak）
+  if(!synth._unlocked){
+    const unlock=new SpeechSynthesisUtterance('');
+    unlock.volume=0; synth.speak(unlock); synth._unlocked=true;
+  }
   synth.cancel(); clearHL();
+  // iOS cancel() 後需要一小段延遲才能再 speak()，否則靜默失敗
+  setTimeout(()=>{ if(!speakAborted) _speakChain(); },120);
+}
+function _speakChain(){
   let i=0;
+  startKeepAlive();
   (function next(){
-    if(i>=readSeq.length){ chars.forEach(c=>c.classList.add('read')); clearCursor(); return; }
+    if(speakAborted){ stopKeepAlive(); return; }
+    if(i>=readSeq.length){ stopKeepAlive(); chars.forEach(c=>c.classList.add('read')); clearCursor(); return; }
     const u=new SpeechSynthesisUtterance(readSeq[i]);
     if(chosenVoice){ u.voice=chosenVoice; u.lang=chosenVoice.lang; } else u.lang='zh-TW';
     u.rate=rate;
     const base=sentenceStart[i], idx=i, len=readSeq[i].length;
-    // 反白跳字與唸的速度同步：用時間估算平滑前進，再用瀏覽器的 boundary 事件即時校正
-    u.pitch=1.05;  // 接近自然音調（太高會像卡通、不像真人）
+    u.pitch=1.05;
     const base0 = learnedMs[readLang] || (/^en/i.test(u.lang)?70:240);
-    let msPerChar = base0/(rate||1);  // 每個字大約幾毫秒
+    let msPerChar = base0/(rate||1);
     let startT=0, startWall=0, shownIdx=-1, lastBoundary=-1, boundaryCount=0;
+    // iOS onend 有時不觸發：用安全計時器兜底
+    let safetyTimer=null, ended=false;
+    function done(){
+      if(ended) return; ended=true;
+      clearTimeout(safetyTimer);
+      cancelAnimationFrame(rafId);
+      const dur=performance.now()-startWall;
+      if(dur>250 && len>0){ const perChar=dur/len*(rate||1);
+        learnedMs[readLang]=learnedMs[readLang]? learnedMs[readLang]*0.5+perChar*0.5 : perChar; }
+      fillSentence(idx); i++; next();
+    }
     function place(ci){
       ci=Math.max(0,Math.min(ci,len-1));
-      if(ci<=shownIdx) return;          // 只往前，不倒退
+      if(ci<=shownIdx) return;
       shownIdx=ci; highlightUpTo(base+ci);
     }
     function tick(now){
       if(!startT) startT=now;
       const elapsed=now-startT;
       const est=Math.floor(elapsed/msPerChar);
-      // 以 boundary（聲音實際唸到的字）為準，反白不超前；瀏覽器不發 boundary 時才退回時間估算
       let cap;
-      if(boundaryCount>0) cap=lastBoundary;           // 精準貼著聲音
-      else if(elapsed<450) cap=0;                     // 先等第一個 boundary，避免開頭就衝太快
-      else cap=len-1;                                 // 真的沒有 boundary 支援（如部分 Safari）
+      if(boundaryCount>0) cap=lastBoundary;
+      else if(elapsed<450) cap=0;
+      else cap=len-1;
       place(Math.min(est, cap));
       rafId=requestAnimationFrame(tick);
     }
@@ -1146,25 +1181,28 @@ function speak(){
       wrappers[idx]&&wrappers[idx].classList.add('active');
       startT=0; startWall=performance.now(); shownIdx=-1; lastBoundary=-1; boundaryCount=0; place(0);
       cancelAnimationFrame(rafId); rafId=requestAnimationFrame(tick);
+      // 安全計時器：估算這句最多唸多久，超時就強制下一句（防 iOS onend 不觸發）
+      const maxMs=Math.max(len*msPerChar*1.8+2000, 6000);
+      safetyTimer=setTimeout(()=>{ if(!ended && !speakAborted) done(); }, maxMs);
     };
     u.onboundary=(e)=>{
       if(e.charIndex==null) return;
       const ci=Math.min(e.charIndex, len-1);
       boundaryCount++; lastBoundary=ci;
-      place(ci);                          // 聲音唸到哪，反白就到哪
+      place(ci);
     };
-    u.onend=()=>{
-      cancelAnimationFrame(rafId);
-      // 用這句的實際時長學習真正的語速，讓沒有 boundary 的瀏覽器下一句更準
-      const dur=performance.now()-startWall;
-      if(dur>250 && len>0){ const perChar=dur/len*(rate||1);
-        learnedMs[readLang]=learnedMs[readLang]? learnedMs[readLang]*0.5+perChar*0.5 : perChar; }
-      fillSentence(idx); i++; next();
-    };
+    u.onend=()=>done();
+    u.onerror=()=>done();
     synth.speak(u);
+    // 極端備援：如果 onstart 也沒觸發（某些 WebView），3 秒後強制推進
+    setTimeout(()=>{ if(!startWall && !ended && !speakAborted) done(); },3000);
   })();
 }
-function stopSpeak(){ if(synth) synth.cancel(); cancelAnimationFrame(rafId); clearHL(); }
+function stopSpeak(){
+  speakAborted=true; stopKeepAlive();
+  if(synth) synth.cancel();
+  cancelAnimationFrame(rafId); clearHL();
+}
 
 /* =================== 我的故事書（收藏/列印）=================== */
 let currentStory=null;
