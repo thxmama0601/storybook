@@ -902,6 +902,24 @@ function showStory(story){
 
 // 點 LOGO：回到首頁最上方（選主角的區塊）
 function goHome(){ window.scrollTo({top:0,behavior:'smooth'}); }
+// 隱藏管理員功能：連按 Logo 5 下重置試玩紀錄
+let logoTaps=0, logoTimer=null;
+document.addEventListener('DOMContentLoaded',()=>{
+  const logo=document.getElementById('logoWrap');
+  if(!logo) return;
+  logo.addEventListener('click',()=>{
+    logoTaps++;
+    clearTimeout(logoTimer);
+    logoTimer=setTimeout(()=>logoTaps=0,2000);
+    if(logoTaps>=5){
+      logoTaps=0;
+      localStorage.removeItem('storyCount');
+      localStorage.removeItem('storyUnlocked');
+      updateTrialBadge();
+      alert('已重置試玩紀錄！');
+    }
+  });
+});
 // 右側抽屜：展開／收合
 function toggleResetDrawer(){ document.getElementById('resetDrawer').classList.toggle('open'); }
 // 重設故事：收起故事，清空選擇，跳回一開始選主角的畫面
