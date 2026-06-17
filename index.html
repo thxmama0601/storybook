@@ -304,7 +304,7 @@
 <div class="wv-banner" id="wvBanner" style="position:relative;">
   🔊 語音朗讀需要用瀏覽器才能播放喔！
   <br>
-  <button class="wv-open-btn" onclick="_openExtBrowser()">👉 用瀏覽器開啟（聽故事）</button>
+  <button class="wv-open-btn" onclick="_openInChrome()">👉 用 Chrome 開啟（聽故事）</button>
   <button class="wv-close" onclick="this.parentElement.style.display='none'">✕</button>
 </div>
 
@@ -1552,25 +1552,36 @@ function delStory(i){
 
 
 /* =================== WebView 偵測與提示 =================== */
-function _openExtBrowser(){
+function _openInChrome(){
   const url=location.href.replace(/[?#].*$/,'');
+  const fallback=encodeURIComponent(url);
   if(/android/i.test(navigator.userAgent)){
-    // Android：用 intent 跳轉到預設瀏覽器
     const stripped=url.replace(/^https?:\/\//,'');
-    location.href='intent://'+stripped+'#Intent;scheme=https;action=android.intent.action.VIEW;end';
+    // 優先開 Chrome，若未安裝則開預設瀏覽器
+    location.href='intent://'+stripped+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+fallback+';end';
   } else {
-    // iOS / 其他：嘗試用 Safari 開啟
+    // iOS：嘗試開 Safari
     window.open(url,'_system')||window.open(url,'_blank');
   }
 }
+// WebView 自動跳轉 Chrome（僅觸發一次，避免迴圈）
 if(_isMobile && isInApp()){
-  document.getElementById('wvBanner').style.display='block';
+  if(!sessionStorage.getItem('_wvTried')){
+    sessionStorage.setItem('_wvTried','1');
+    _openInChrome();
+    // 若 1.5 秒後還在此頁（跳轉失敗），顯示橫幅
+    setTimeout(()=>{
+      document.getElementById('wvBanner').style.display='block';
+    },1500);
+  } else {
+    document.getElementById('wvBanner').style.display='block';
+  }
 }
 function _showWebviewHint(){
   if(document.querySelector('.wv-toast')) return;
   const t=document.createElement('div');
   t.className='wv-toast';
-  t.innerHTML='🔇 此瀏覽器無法播放語音<br><button class="wv-open-btn" onclick="_openExtBrowser()">👉 用瀏覽器開啟</button><br><span style="font-size:12px;opacity:.7;">或點右下角 ⋯ →「預設瀏覽器開啟」</span>';
+  t.innerHTML='🔇 此瀏覽器無法播放語音<br><button class="wv-open-btn" onclick="_openInChrome()">👉 用 Chrome 開啟</button><br><span style="font-size:12px;opacity:.7;">或點右下角 ⋯ →「預設瀏覽器開啟」</span>';
   document.body.appendChild(t);
   setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .5s'; setTimeout(()=>t.remove(),600); },8000);
 }
