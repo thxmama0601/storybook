@@ -1013,7 +1013,7 @@ function voiceScore(v){
   if(/Google/i.test(n)) s+=10;
   return s;
 }
-// 偵測 App 內建瀏覽器（LINE／FB／IG／微信等 WebView），這些多半不支援唸故事
+// 偵測 App 內建瀏覽器（LINE／FB／IG／微信等 WebView）
 function isInApp(){
   const u=navigator.userAgent||'';
   return /Line\/|FBAN|FBAV|FB_IAB|Instagram|MicroMessenger|; wv\)|musical_ly|TikTok/i.test(u);
@@ -1021,7 +1021,7 @@ function isInApp(){
 function setTtsWarn(){
   const w=document.getElementById('ttsWarn');
   if(isInApp()){
-    w.innerHTML='😅 你好像是用 App（LINE／FB／IG…）裡面開的，這種瀏覽器不能唸故事喔！請點右上角「⋯」選「用瀏覽器開啟」，或複製網址用 <b>Safari／Chrome</b> 打開～';
+    w.innerHTML='📢 偵測到 App 內建瀏覽器，將使用線上語音為你唸故事。如果聽不到聲音，請點右上角「⋯」選「用瀏覽器開啟」試試～';
   }else{
     w.innerHTML='😅 這個瀏覽器好像沒有中文／英文語音，建議用 <b>Chrome／Edge</b>（電腦）或 <b>Safari</b>（iPhone）打開喔！';
   }
@@ -1053,7 +1053,7 @@ function loadVoices(){
     chosenVoice=voices[0];
     setTtsWarn();
   }else{
-    s.innerHTML='<option>（語音載入中…）</option>';
+    s.innerHTML='<option>（線上語音 — 自動）</option>';
     setTtsWarn();
   }
 }
@@ -1110,7 +1110,7 @@ function highlightUpTo(n){
   }
 }
 function fillSentence(i){ const end=sentenceStart[i]+readSeq[i].length; for(let k=0;k<end;k++) chars[k]&&chars[k].classList.add('read'); clearCursor(); }
-let rafId=null, learnedMs={zh:0,en:0};   // 各語言「每字實際毫秒」(rate=1)，用前一句時長學習校正
+let rafId=null, learnedMs={zh:0,en:0};
 // iOS Safari 會在 ~15 秒後靜默暫停語音，定時 resume() 保持播放
 let iosKeepAlive=null;
 function startKeepAlive(){
@@ -1120,19 +1120,80 @@ function startKeepAlive(){
 }
 function stopKeepAlive(){ if(iosKeepAlive){ clearInterval(iosKeepAlive); iosKeepAlive=null; } }
 
-let speakAborted=false;
+/* ---------- 判斷是否需要備援語音 ---------- */
+let fallbackAudio=null, speakAborted=false;
+function needsFallback(){
+  if(!synth) return true;
+  if(isInApp()) return true;
+  const v=synth.getVoices(); if(!v||!v.length) return true;
+  return false;
+}
+
+/* ---------- Google Translate TTS 備援（所有瀏覽器都能播 <audio>）---------- */
+function gTtsUrl(text, lang){
+  const tl=lang==='en'?'en':'zh-TW';
+  return 'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl='+tl+'&q='+encodeURIComponent(text);
+}
+function _speakFallback(){
+  let i=0;
+  (function next(){
+    if(speakAborted||i>=readSeq.length){
+      if(!speakAborted){ chars.forEach(c=>c.classList.add('read')); clearCursor(); }
+      return;
+    }
+    const text=readSeq[i], base=sentenceStart[i], idx=i, len=text.length;
+    wrappers.forEach(w=>w.classList.remove('active'));
+    wrappers[idx]&&wrappers[idx].classList.add('active');
+    const audio=new Audio(gTtsUrl(text, readLang));
+    fallbackAudio=audio;
+    audio.playbackRate=rate;
+    let startT=0, shownIdx=-1;
+    const msBase=readLang==='en'?70:240;
+    let msPerChar=msBase/(rate||1);
+    function place(ci){
+      ci=Math.max(0,Math.min(ci,len-1));
+      if(ci<=shownIdx) return;
+      shownIdx=ci; highlightUpTo(base+ci);
+    }
+    function tick(now){
+      if(speakAborted) return;
+      if(!startT) startT=now;
+      const est=Math.floor((now-startT)/msPerChar);
+      place(Math.min(est,len-1));
+      if(est<len) rafId=requestAnimationFrame(tick);
+    }
+    audio.onplay=()=>{
+      startT=0; shownIdx=-1; place(0);
+      cancelAnimationFrame(rafId); rafId=requestAnimationFrame(tick);
+      // 用實際音訊長度校正每字毫秒（loadedmetadata 拿得到 duration）
+      if(audio.duration&&isFinite(audio.duration)&&len>0) msPerChar=audio.duration*1000/len/(rate||1);
+    };
+    audio.onloadedmetadata=()=>{
+      if(audio.duration&&isFinite(audio.duration)&&len>0) msPerChar=audio.duration*1000/len/(rate||1);
+    };
+    audio.onended=()=>{ cancelAnimationFrame(rafId); fillSentence(idx); i++; next(); };
+    audio.onerror=()=>{ cancelAnimationFrame(rafId); fillSentence(idx); i++; next(); };
+    audio.play().catch(()=>{ fillSentence(idx); i++; next(); });
+  })();
+}
+
+/* ---------- 主要 speak()：自動選原生 or 備援 ---------- */
 function speak(){
-  if(!synth||readSeq.length===0) return;
-  speakAborted=false;
-  // iOS 常在第一次點擊後才載入語音
-  if(!chosenVoice || !voices.length) loadVoices();
-  // 先用一句空白 utterance「解鎖」音訊（iOS/Android 需要使用者手勢內觸發過一次 speak）
+  if(readSeq.length===0) return;
+  speakAborted=false; clearHL();
+  // 備援路徑：用 Google Translate TTS <audio>（WebView/無語音瀏覽器）
+  if(needsFallback()){
+    if(fallbackAudio){ fallbackAudio.pause(); fallbackAudio=null; }
+    _speakFallback();
+    return;
+  }
+  // 原生 speechSynthesis 路徑
+  if(!chosenVoice||!voices.length) loadVoices();
   if(!synth._unlocked){
     const unlock=new SpeechSynthesisUtterance('');
     unlock.volume=0; synth.speak(unlock); synth._unlocked=true;
   }
-  synth.cancel(); clearHL();
-  // iOS cancel() 後需要一小段延遲才能再 speak()，否則靜默失敗
+  synth.cancel();
   setTimeout(()=>{ if(!speakAborted) _speakChain(); },120);
 }
 function _speakChain(){
@@ -1146,18 +1207,16 @@ function _speakChain(){
     u.rate=rate;
     const base=sentenceStart[i], idx=i, len=readSeq[i].length;
     u.pitch=1.05;
-    const base0 = learnedMs[readLang] || (/^en/i.test(u.lang)?70:240);
-    let msPerChar = base0/(rate||1);
+    const base0=learnedMs[readLang]||(/^en/i.test(u.lang)?70:240);
+    let msPerChar=base0/(rate||1);
     let startT=0, startWall=0, shownIdx=-1, lastBoundary=-1, boundaryCount=0;
-    // iOS onend 有時不觸發：用安全計時器兜底
     let safetyTimer=null, ended=false;
     function done(){
       if(ended) return; ended=true;
-      clearTimeout(safetyTimer);
-      cancelAnimationFrame(rafId);
+      clearTimeout(safetyTimer); cancelAnimationFrame(rafId);
       const dur=performance.now()-startWall;
-      if(dur>250 && len>0){ const perChar=dur/len*(rate||1);
-        learnedMs[readLang]=learnedMs[readLang]? learnedMs[readLang]*0.5+perChar*0.5 : perChar; }
+      if(dur>250&&len>0){ const perChar=dur/len*(rate||1);
+        learnedMs[readLang]=learnedMs[readLang]?learnedMs[readLang]*0.5+perChar*0.5:perChar; }
       fillSentence(idx); i++; next();
     }
     function place(ci){
@@ -1173,7 +1232,7 @@ function _speakChain(){
       if(boundaryCount>0) cap=lastBoundary;
       else if(elapsed<450) cap=0;
       else cap=len-1;
-      place(Math.min(est, cap));
+      place(Math.min(est,cap));
       rafId=requestAnimationFrame(tick);
     }
     u.onstart=()=>{
@@ -1181,26 +1240,24 @@ function _speakChain(){
       wrappers[idx]&&wrappers[idx].classList.add('active');
       startT=0; startWall=performance.now(); shownIdx=-1; lastBoundary=-1; boundaryCount=0; place(0);
       cancelAnimationFrame(rafId); rafId=requestAnimationFrame(tick);
-      // 安全計時器：估算這句最多唸多久，超時就強制下一句（防 iOS onend 不觸發）
-      const maxMs=Math.max(len*msPerChar*1.8+2000, 6000);
-      safetyTimer=setTimeout(()=>{ if(!ended && !speakAborted) done(); }, maxMs);
+      const maxMs=Math.max(len*msPerChar*1.8+2000,6000);
+      safetyTimer=setTimeout(()=>{ if(!ended&&!speakAborted) done(); },maxMs);
     };
     u.onboundary=(e)=>{
       if(e.charIndex==null) return;
-      const ci=Math.min(e.charIndex, len-1);
-      boundaryCount++; lastBoundary=ci;
-      place(ci);
+      const ci=Math.min(e.charIndex,len-1);
+      boundaryCount++; lastBoundary=ci; place(ci);
     };
     u.onend=()=>done();
     u.onerror=()=>done();
     synth.speak(u);
-    // 極端備援：如果 onstart 也沒觸發（某些 WebView），3 秒後強制推進
-    setTimeout(()=>{ if(!startWall && !ended && !speakAborted) done(); },3000);
+    setTimeout(()=>{ if(!startWall&&!ended&&!speakAborted) done(); },3000);
   })();
 }
 function stopSpeak(){
   speakAborted=true; stopKeepAlive();
   if(synth) synth.cancel();
+  if(fallbackAudio){ fallbackAudio.pause(); fallbackAudio.src=''; fallbackAudio=null; }
   cancelAnimationFrame(rafId); clearHL();
 }
 
